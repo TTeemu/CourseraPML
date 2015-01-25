@@ -1,0 +1,119 @@
+---
+title: "Activity prediction"
+author: "TTeemu"
+date: "Tuesday, January 25, 2015"
+output: html_document
+toc: yes
+---
+
+# 1. Introduction
+
+This analysis is made for coursera Practical Machine Learning course. The purpose of this analysis is to examine the predictability of an activity based on sensor data gathered. After examination of the features available for prediction we try to predict each class correctly by using machine learning methdologies.
+
+# 2. Preprocessing and explanatory analysis
+
+```{r}
+# Reading in datasets
+training <- read.csv("pml-training.csv")
+testing <- read.csv("pml-testing.csv")
+x <- c()
+for(i in 1 :length(training)){
+  x[i] <- length(which(is.na(training[,i])))
+}
+## Removing vars where over half of observations are missing
+remo <- which(x>(dim(training)[1])/2)
+training <- training[,-c(remo)]
+testing <- testing[,-c(remo)]
+
+#Removing identification variabels that are not neccessary in the analysis
+training <- training[,-c(1:7)]
+testing <- testing[,-c(1:7)]
+
+```
+
+We noticed that the training set has `r dim(training)[1]` observations and `r dim(training)[2]` variables after removing variables which had more than half of observations missing. so it would not be feasible with the limitations of this analysis to further study each of the variables. 
+
+
+The testing data set does not have class information variable and thus cannot be used as evaluation set. Therefore training set is divided into training set (70%) and validation sets (30%). Also near zero variance variables are removed.
+
+
+```{r}
+library(caret)
+for(i in 1:(dim(training)[2]-1)){
+  training[,i] <- as.numeric(training[,i])
+}
+
+for(i in 1:(dim(testing)[2]-1)){
+  testing[,i] <- as.numeric(testing[,i])
+}
+
+set.seed(13)
+
+nzv <- nearZeroVar(training)
+training <- training[,-c(nzv)]
+testing <- testing[,-c(nzv)]
+
+set.seed(1987)
+inTrain <- createDataPartition(y=training$classe,p=0.7,list=F)
+train1 <- training[inTrain,]
+vald1 <- training[-inTrain,]
+
+```
+
+
+
+# 2. Model building
+
+In this section models for the predictive purposes are built. We chose to incorporate all available information in the models. 
+
+Methodologies chosen to be tested and used is Random forests.
+
+Models were trained and chosen by using 5-fold cross-validation.
+
+```{r}
+library(rattle)
+
+preProc <- preProcess(train1[,-c(53)],method=c("pca","scale","center"),thresh=0.90)
+pcaTrain <- predict(preProc,train1[,-53])
+
+pairs(pcaTrain[,1:10], col = train1$classe)
+pairs(pcaTrain[,11:20], col = train1$classe)
+
+pcaVald <- predict(preProc,vald1[,-dim(vald1)[2]])
+
+pcaTest <- predict(preProc, testing[,-dim(testing)[2]])
+```
+
+From the two pair plots we can notice that we can distinquish in some extent the different classes this could indicate that it would be possible to predict and classify new instances using the created principal components but first lets try using the raw data.  The model builds 50 trees.
+
+```{r}
+library(caret)
+library(AppliedPredictiveModeling)
+library("randomForest")
+rf <- randomForest(classe ~ ., train1, ntree=50, norm.votes=FALSE)
+rf
+```
+
+The results would indicate that OOB estimate of  error rate: 0.77% which is quite optimistic but nevertheless the model should be able to classify the activities with quite the accuracy.
+
+# 3. Model evaluation
+
+In this section the model constucted are evaluated by their performance within the training set.
+
+```{r}
+confusionMatrix(vald1$classe,predict(rf,vald1))
+
+```
+
+The model accuracy is also supported by the validation set results which indicate a little lower results but still good enough for our purposes.
+
+# 4. Conclusions and final predictions
+
+Based on the results we can say that it is possible to classify the different types of activities by using sensory input data.
+
+```{r}
+predicted <- predict(rf,testing)
+predicted
+```
+
+The final predicted classes by the model.
